@@ -260,8 +260,8 @@ public extension HTTPHeader.Value {
     // Accept-Language HTTP Header; see https://tools.ietf.org/html/rfc7231#section-5.3.5
     public static let defaultAcceptLanguage: HTTPHeader.Value = {
         let languageString = Locale.preferredLanguages.prefix(6).enumerated().map { index, languageCode in
-            let quality = 1.0 - (Double(index) * 0.1)
-            return "\(languageCode);q=\(quality)"
+                let quality = 1.0 - (Double(index) * 0.1)
+                return "\(languageCode);q=\(quality)"
             }.joined(separator: ", ")
         
         return HTTPHeader.Value(languageString)
