@@ -187,7 +187,7 @@ class DataResponseSerializationTestCase: BaseTestCase {
     func testThatStringResponseSerializerSucceedsWithUTF8DataUsingResponseTextEncodingName() {
         let serializer = StringResponseSerializer()
         let data = "data".data(using: .utf8)!
-        let response = HTTPURLResponse(statusCode: 200, headers: ["Content-Type": "image/jpeg; charset=utf-8"])
+        let response = HTTPURLResponse(statusCode: 200, headers: [.contentType("image/jpeg; charset=utf-8")])
 
         // When
         let result = serializer.serialize(request: nil, response: response, data: data, error: nil)
@@ -223,7 +223,7 @@ class DataResponseSerializationTestCase: BaseTestCase {
         // Given
         let serializer = StringResponseSerializer()
         let data = "random data".data(using: .utf32)!
-        let response = HTTPURLResponse(statusCode: 200, headers: ["Content-Type": "image/jpeg; charset=utf-8"])
+        let response = HTTPURLResponse(statusCode: 200, headers: [.contentType("image/jpeg; charset=utf-8")])
 
         // When
         let result = serializer.serialize(request: nil, response: response, data: data, error: nil)
@@ -975,7 +975,7 @@ class DownloadResponseSerializationTestCase: BaseTestCase {
     func testThatStringResponseSerializerSucceedsWithUTF8DataUsingResponseTextEncodingName() {
         // Given
         let serializer = StringResponseSerializer()
-        let response = HTTPURLResponse(statusCode: 200, headers: ["Content-Type": "image/jpeg; charset=utf-8"])
+        let response = HTTPURLResponse(statusCode: 200, headers: [.contentType("image/jpeg; charset=utf-8")])
 
         // When
         let result = serializer.serializeDownload(request: nil, response: response, fileURL: stringUTF8DataFileURL, error: nil)
@@ -1009,7 +1009,7 @@ class DownloadResponseSerializationTestCase: BaseTestCase {
     func testThatStringResponseSerializerFailsWithUTF32DataAndUTF8ResponseEncoding() {
         // Given
         let serializer = StringResponseSerializer()
-        let response = HTTPURLResponse(statusCode: 200, headers: ["Content-Type": "image/jpeg; charset=utf-8"])
+        let response = HTTPURLResponse(statusCode: 200, headers: [.contentType("image/jpeg; charset=utf-8")])
 
         // When
         let result = serializer.serializeDownload(request: nil, response: response, fileURL: stringUTF32DataFileURL, error: nil)

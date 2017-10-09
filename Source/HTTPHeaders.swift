@@ -24,6 +24,7 @@
 
 import Foundation
 
+
 public struct HTTPHeaders {
     private var headers: Set<HTTPHeader> = []
     
@@ -37,6 +38,14 @@ public struct HTTPHeaders {
         headers.forEach { self.headers.insert($0) }
     }
     
+    public mutating func add<Header: HTTPHeaderConvertible>(_ headerConvertible: Header) throws {
+        headers.insert(try headerConvertible.asHTTPHeader())
+    }
+    
+    public mutating func remove<Header: HTTPHeaderConvertible>(_ headerConvertible: Header) throws {
+        headers.remove(try headerConvertible.asHTTPHeader())
+    }
+    
     public mutating func remove(_ headers: HTTPHeader...) {
         headers.forEach { self.headers.remove($0) }
     }
@@ -44,8 +53,7 @@ public struct HTTPHeaders {
     public func asDictionary() -> [String : String] {
         let names = headers.map { $0.name.rawValue }
         let values = headers.map { $0.value.rawValue }
-        return Dictionary(zip(names, values),
-                          uniquingKeysWith: { (_, last) in last })
+        return Dictionary(zip(names, values), uniquingKeysWith: { (_, last) in last })
     }
     
     public func header(for name: HTTPHeader.Name) -> HTTPHeader? {
@@ -70,28 +78,11 @@ public struct HTTPHeaders {
             }
         }
     }
-    
-    public subscript(name: HTTPHeader.Name) -> HTTPHeader? {
-        get { return header(for: name) }
-        set {
-            if let value = newValue {
-                add(value)
-            } else if let index = headers.index(where: { $0.name == name }) {
-                headers.remove(at: index)
-            }
-        }
-    }
 }
 
 extension HTTPHeaders: ExpressibleByArrayLiteral {
     public init(arrayLiteral elements: HTTPHeader...) {
         headers = Set(elements)
-    }
-}
-
-extension HTTPHeaders: ExpressibleByDictionaryLiteral {
-    public init(dictionaryLiteral elements: (String, String)...) {
-        self.headers = Set(elements.map { HTTPHeader(name: HTTPHeader.Name($0), value: HTTPHeader.Value($1)) })
     }
 }
 
@@ -103,7 +94,7 @@ extension HTTPHeaders: CustomStringConvertible {
 
 extension HTTPHeaders: Sequence {
     public func makeIterator() -> AnyIterator<HTTPHeader> {
-        return AnyIterator(headers.sorted{ $0.name < $1.name }.makeIterator())
+        return AnyIterator(headers.sorted().makeIterator())
     }
 }
 
@@ -124,6 +115,67 @@ public struct HTTPHeader {
         
         public init(_ rawValue: String) {
             self.rawValue = rawValue
+        }
+    }
+}
+
+public protocol HTTPHeaderConvertible {
+    func asHTTPHeader() throws -> HTTPHeader
+}
+
+///
+public struct MIMEType {
+    public let type: String
+    public let subtype: String
+    public let isWildcard: Bool
+    
+    public var stringValue: String { return "\(type)/\(subtype)" }
+    
+    public init(type: String, subtype: String) {
+        self.type = type
+        self.subtype = subtype
+        self.isWildcard = (type == "*" && subtype == "*")
+    }
+    
+    public init?(_ string: String) {
+        let stripped = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let split = stripped[..<(stripped.range(of: ";")?.lowerBound ?? stripped.endIndex)]
+        let components = split.components(separatedBy: "/")
+        
+        guard let type = components.first, let subtype = components.last else { return nil }
+        
+        self.type = type
+        self.subtype = subtype
+        self.isWildcard = (type == "*" && subtype == "*")
+    }
+}
+
+extension MIMEType: HTTPHeaderConvertible {
+    public func asHTTPHeader() throws -> HTTPHeader {
+        return .contentType(stringValue)
+    }
+}
+
+extension HTTPHeader: HTTPHeaderConvertible {
+    public func asHTTPHeader() throws -> HTTPHeader {
+        return self
+    }
+}
+
+extension MIMEType {
+    static let json = MIMEType("application/json")
+    static let xml = MIMEType("application/xml")
+    static let formEncoded = MIMEType("application/x-www-form-urlencoded")
+    static let multipartFormData = MIMEType("multipart/form-data")
+}
+
+extension MIMEType: Equatable {
+    public static func ==(lhs: MIMEType, rhs: MIMEType) -> Bool {
+        switch (lhs.type, lhs.subtype) {
+        case (rhs.type, rhs.subtype), (rhs.type, "*"), ("*", rhs.subtype), ("*", "*"):
+            return true
+        default:
+            return false
         }
     }
 }
@@ -221,16 +273,35 @@ public extension HTTPHeader {
     //        return HTTPHeader(name: .contentEncoding, value: mimeType.)
     //    }
     
+    static func contentType(_ mimeType: String) -> HTTPHeader {
+        return HTTPHeader(name: .contentType, value: Value(mimeType))
+        
+    }
+    
     public static func authorization(_ string: String) -> HTTPHeader {
         return HTTPHeader(name: .authorization, value: Value(string))
+    }
+
+    /// Returns a base64 encoded basic authentication credential as an `Authorization` header.
+    ///
+    /// - Parameters:
+    ///   - user:     The user.
+    ///   - password: The password.
+    /// - Returns:    An `HTTPHeader` value if encoding succeeds, `nil` otherwise.
+    public static func authorization(user: String, password: String) -> HTTPHeader? {
+        guard let data = "\(user):\(password)".data(using: .utf8) else { return nil }
+        
+        let credential = data.base64EncodedString(options: [])
+        
+        return HTTPHeader(name: .authorization, value: .basic(credential))
     }
     
     public static func acceptLanguage(_ value: String) -> HTTPHeader {
         return HTTPHeader(name: .acceptLanguage, value: Value(value))
     }
     
-    public static func acceptEncoding(_ value: Value) -> HTTPHeader {
-        return HTTPHeader(name: .acceptEncoding, value: value)
+    public static func acceptEncoding(_ value: String) -> HTTPHeader {
+        return HTTPHeader(name: .acceptEncoding, value: Value(value))
     }
     
     public static func contentDisposition(_ value: String) -> HTTPHeader {
@@ -253,8 +324,8 @@ public extension HTTPHeader.Name {
 }
 
 public extension HTTPHeader.Value {
-    public static let json = HTTPHeader.Value("application/json")
-    public static let xml = HTTPHeader.Value("application/xml")
+    // MARK: - Default Header Values
+    
     // Accept-Encoding HTTP Header; see https://tools.ietf.org/html/rfc7230#section-4.2.3
     public static let defaultAcceptEncoding = HTTPHeader.Value("br;q=1.0, gzip;q=0.9, compress;q=0.8") // Determine whether this is actually necessary
     // Accept-Language HTTP Header; see https://tools.ietf.org/html/rfc7231#section-5.3.5
@@ -310,6 +381,12 @@ public extension HTTPHeader.Value {
         
         return HTTPHeader.Value("\(executable)/\(appVersion) (\(bundle); build:\(appBuild); \(osNameVersion)) \(alamofireVersion)")
     }()
+    
+    // MARK: Convenicence Header Values
+    
+    static func basic(_ credential: String) -> HTTPHeader.Value {
+        return HTTPHeader.Value("Basic \(credential)")
+    }
 }
 
 public extension URLRequest {
